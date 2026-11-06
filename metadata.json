@@ -1,0 +1,6 @@
+{
+  "name": "Leonardo Militão Advogados Associados",
+  "description": "Presença digital e sistema integrado de atendimento e CRM para Leonardo Militão Advogados Associados.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
