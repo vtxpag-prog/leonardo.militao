@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
-import { UserAccount, Lead, LeadStage } from '../../types/crm';
+import { UserAccount, Lead, LeadStage, FollowUpReminder } from '../../types/crm';
 import { CRMDashboard } from './CRMDashboard';
 import { CRMKanban } from './CRMKanban';
 import { CRMUserManagement } from './CRMUserManagement';
 import { CRMContentEditor } from './CRMContentEditor';
 import { CRMDocumentation } from './CRMDocumentation';
+import { CRMPieWidget } from './CRMPieWidget';
+import { CRMReminderManager } from './CRMReminderManager';
 import { 
   Scale, LogOut, ArrowLeft, BarChart3, Columns, Users, Shield, 
-  CheckCircle2, Bell, RefreshCw, Crown, FileEdit, BookOpen
+  CheckCircle2, Bell, RefreshCw, Crown, FileEdit, BookOpen, Clock, AlertTriangle
 } from 'lucide-react';
 
 interface CRMPanelProps {
   currentUser: UserAccount;
   leads: Lead[];
   users: UserAccount[];
+  reminders: FollowUpReminder[];
+  onAddReminder: (reminder: FollowUpReminder) => void;
+  onToggleReminderStatus: (reminderId: string) => void;
+  onDeleteReminder: (reminderId: string) => void;
   onUpdateLead: (updatedLead: Lead) => void;
   onUpdateLeadStage: (leadId: string, newStage: LeadStage) => void;
   onDeleteLead: (leadId: string) => void;
@@ -27,6 +33,10 @@ export const CRMPanel: React.FC<CRMPanelProps> = ({
   currentUser,
   leads,
   users,
+  reminders,
+  onAddReminder,
+  onToggleReminderStatus,
+  onDeleteReminder,
   onUpdateLead,
   onUpdateLeadStage,
   onDeleteLead,
@@ -35,9 +45,17 @@ export const CRMPanel: React.FC<CRMPanelProps> = ({
   onLogout,
   onBackToSite
 }) => {
-  const [activeTab, setActiveTab] = useState<'kanban' | 'dashboard' | 'content' | 'users' | 'docs'>('kanban');
+  const [activeTab, setActiveTab] = useState<'kanban' | 'reminders' | 'dashboard' | 'content' | 'users' | 'docs'>('kanban');
+  const [selectedLeadForDetail, setSelectedLeadForDetail] = useState<string | null>(null);
 
   const isMaster = currentUser.role === 'master_admin';
+
+  // Counts for pending and overdue reminders
+  const pendingRemindersCount = reminders.filter(r => r.status === 'pending').length;
+  const overdueRemindersCount = reminders.filter(r => {
+    if (r.status === 'completed') return false;
+    return new Date(r.dueDateTime).getTime() < Date.now();
+  }).length;
 
   return (
     <div className="min-h-screen bg-[#F6F2EB] text-[#2A231F] flex flex-col font-sans">
@@ -70,10 +88,10 @@ export const CRMPanel: React.FC<CRMPanelProps> = ({
           </div>
 
           {/* Center Tabs */}
-          <div className="flex items-center space-x-1 bg-[#FAF7F2] p-1 rounded-2xl border border-[#DDD3C4] text-xs font-semibold">
+          <div className="flex items-center space-x-1 bg-[#FAF7F2] p-1 rounded-2xl border border-[#DDD3C4] text-xs font-semibold overflow-x-auto max-w-full">
             <button
               onClick={() => setActiveTab('kanban')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all shrink-0 ${
                 activeTab === 'kanban'
                   ? 'bg-[#B86F3B] text-white shadow-xs'
                   : 'text-[#6B5A51] hover:text-[#2A231F]'
@@ -87,8 +105,29 @@ export const CRMPanel: React.FC<CRMPanelProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('reminders')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all shrink-0 ${
+                activeTab === 'reminders'
+                  ? 'bg-[#B86F3B] text-white shadow-xs'
+                  : 'text-[#6B5A51] hover:text-[#2A231F]'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>Pendências</span>
+              {pendingRemindersCount > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  overdueRemindersCount > 0
+                    ? 'bg-[#8C3A3A] text-white animate-pulse'
+                    : activeTab === 'reminders' ? 'bg-white/20 text-white' : 'bg-[#EAE2D5] text-[#736359]'
+                }`}>
+                  {pendingRemindersCount}
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all shrink-0 ${
                 activeTab === 'dashboard'
                   ? 'bg-[#B86F3B] text-white shadow-xs'
                   : 'text-[#6B5A51] hover:text-[#2A231F]'
@@ -100,7 +139,7 @@ export const CRMPanel: React.FC<CRMPanelProps> = ({
 
             <button
               onClick={() => setActiveTab('content')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all shrink-0 ${
                 activeTab === 'content'
                   ? 'bg-[#B86F3B] text-white shadow-xs'
                   : 'text-[#6B5A51] hover:text-[#2A231F]'
@@ -112,7 +151,7 @@ export const CRMPanel: React.FC<CRMPanelProps> = ({
 
             <button
               onClick={() => setActiveTab('users')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all shrink-0 ${
                 activeTab === 'users'
                   ? 'bg-[#B86F3B] text-white shadow-xs'
                   : 'text-[#6B5A51] hover:text-[#2A231F]'
@@ -124,7 +163,7 @@ export const CRMPanel: React.FC<CRMPanelProps> = ({
 
             <button
               onClick={() => setActiveTab('docs')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all ${
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl transition-all shrink-0 ${
                 activeTab === 'docs'
                   ? 'bg-[#B86F3B] text-white shadow-xs'
                   : 'text-[#6B5A51] hover:text-[#2A231F]'
@@ -161,14 +200,58 @@ export const CRMPanel: React.FC<CRMPanelProps> = ({
       {/* Main CRM Body */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 space-y-6">
         {activeTab === 'kanban' && (
-          <CRMKanban
-            leads={leads}
-            currentUser={currentUser}
-            onUpdateLead={onUpdateLead}
-            onUpdateLeadStage={onUpdateLeadStage}
-            onDeleteLead={onDeleteLead}
-            onAddLead={onAddLead}
-          />
+          <div className="space-y-6">
+            {/* Small Pie Chart Widget at top of CRMPanel */}
+            <CRMPieWidget leads={leads} />
+
+            {/* Internal Notification / Pending Follow-ups System */}
+            <CRMReminderManager
+              reminders={reminders}
+              leads={leads}
+              currentUser={currentUser}
+              onAddReminder={onAddReminder}
+              onToggleReminderStatus={onToggleReminderStatus}
+              onDeleteReminder={onDeleteReminder}
+              onOpenLeadDetail={(leadId) => {
+                setSelectedLeadForDetail(leadId);
+              }}
+            />
+
+            {/* Kanban de Leads */}
+            <CRMKanban
+              leads={leads}
+              currentUser={currentUser}
+              reminders={reminders}
+              onAddReminder={onAddReminder}
+              onToggleReminderStatus={onToggleReminderStatus}
+              onDeleteReminder={onDeleteReminder}
+              onUpdateLead={onUpdateLead}
+              onUpdateLeadStage={onUpdateLeadStage}
+              onDeleteLead={onDeleteLead}
+              onAddLead={onAddLead}
+              externalSelectedLeadId={selectedLeadForDetail}
+              onClearExternalSelectedLeadId={() => setSelectedLeadForDetail(null)}
+            />
+          </div>
+        )}
+
+        {activeTab === 'reminders' && (
+          <div className="space-y-6">
+            <CRMPieWidget leads={leads} />
+
+            <CRMReminderManager
+              reminders={reminders}
+              leads={leads}
+              currentUser={currentUser}
+              onAddReminder={onAddReminder}
+              onToggleReminderStatus={onToggleReminderStatus}
+              onDeleteReminder={onDeleteReminder}
+              onOpenLeadDetail={(leadId) => {
+                setSelectedLeadForDetail(leadId);
+                setActiveTab('kanban');
+              }}
+            />
+          </div>
         )}
 
         {activeTab === 'dashboard' && (
